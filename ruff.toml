@@ -1,0 +1,17 @@
+line-length = 96
+target-version = "py311"
+
+[lint]
+select = ["E", "F", "I", "UP", "B", "SIM", "RUF"]
+ignore = [
+  "SIM118",  # h5py Groups are not dicts; .keys() is the idiomatic read there
+  "B008",
+  "E501",
+]
+
+[lint.per-file-ignores]
+"**/tests/**" = ["S101"]
+
+[lint.isort]
+# pytest puts `conftest` on sys.path; without this ruff sorts it as third-party.
+known-first-party = ["h5ad_obs", "conftest"]

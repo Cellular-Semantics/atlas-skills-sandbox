@@ -1,0 +1,131 @@
+name: test
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: false
+      - run: uvx ruff check packages/ plugins/ scripts/ tests/
+
+  validate:
+    # The manifests as Claude Code reads them: the marketplace, and each plugin's
+    # manifest, skills and agents. A marketplace run does not open the plugins'
+    # own files, so each plugin is validated separately as well.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - run: npm install -g @anthropic-ai/claude-code
+      - run: |
+          claude plugin validate .
+          for p in plugins/*/; do claude plugin validate "$p"; done
+
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python: ["3.11", "3.12", "3.13"]
+    steps:
+      - uses: actions/checkout@v5
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: false
+      - run: uv venv --python ${{ matrix.python }}
+      - run: uv pip install -e "packages/h5ad-obs[test]"
+      # Live tests are excluded by the package's addopts: they read a real remote
+      # h5ad. The offline suite still covers the whole range-read path, against a
+      # localhost server that honours Range.
+      - run: uv run pytest packages/h5ad-obs -q
+      # The release tooling, against throwaway git repos.
+      - run: uv run pytest tests -q
+      - run: python3 scripts/versions.py report --check docs/pins.md
+
+  version-bumps:
+    # A change under plugins/<p>/ must bump that plugin's version, and a change to
+    # a package's code must bump the package's. Installed plugins refresh only
+    # when the version string changes, so an unbumped skill edit reaches nobody
+    # who already has the plugin -- and nothing else would notice.
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - run: python3 scripts/versions.py check-bumps --base "origin/${{ github.base_ref }}"
+
+  install-from-git:
+    # The published contract: what a user gets from a SKILL.md command.
+    #
+    # Runs on pull requests as well as main, deliberately. Gating it to main
+    # meant a packaging fault -- a file never committed, a missing package-data
+    # entry, a broken entry point -- was only discovered after merge, which is
+    # the one moment it cannot be fixed cheaply.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: false
+      # On a pull request github.sha is a synthetic merge commit. Pin to the
+      # branch head instead, so what is tested is what was pushed.
+      - id: rev
+        run: |
+          echo "sha=${{ github.event.pull_request.head.sha || github.sha }}" >> "$GITHUB_OUTPUT"
+      - run: |
+          for d in packages/*/; do
+            pkg=$(basename "$d")
+            uvx --from "git+https://github.com/${{ github.repository }}@${{ steps.rev.outputs.sha }}#subdirectory=packages/$pkg" \
+              "$pkg" --version
+          done
+
+  skill-pins-resolve:
+    # Every `uvx --from git+...@<tag>` line a skill on this branch tells a user to
+    # run, run as written. A pin to a tag that does not exist yet fails for
+    # everyone except the author, whose uv cache already holds the package.
+    #
+    # Which is also why a package change and the pin that adopts it cannot share
+    # a pull request: the package tag is cut on merge, so the pin has nothing to
+    # resolve to until then. Release the package first, then move the pin.
+    #
+    # Pins at older plugin tags are the nightly workflow's job.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: false
+      - name: Resolve every pin on this branch
+        run: |
+          set -uo pipefail
+          pins=$(python3 scripts/versions.py pins --tags 0 | cut -f1)
+          if [ -z "$pins" ]; then
+            echo "no pins found, which means the pattern is wrong rather than the repo"
+            exit 1
+          fi
+          status=0
+          while read -r pin; do
+            # Every package's console script is named after its directory, and
+            # every CLI here supports --version.
+            cli=${pin##*subdirectory=packages/}
+            echo "::group::$cli  $pin"
+            if uvx --from "$pin" "$cli" --version; then
+              echo "resolves"
+            else
+              echo "DOES NOT RESOLVE. Either the tag was never pushed, or the"
+              echo "subdirectory is wrong. A package tag only exists once the"
+              echo "release workflow has cut it from main."
+              status=1
+            fi
+            echo "::endgroup::"
+          done <<< "$pins"
+          exit $status

@@ -1,0 +1,23 @@
+{
+  "name": "atlas-skills-sandbox",
+  "owner": {
+    "name": "Cellular Semantics",
+    "url": "https://github.com/Cellular-Semantics"
+  },
+  "metadata": {
+    "description": "Sandbox for atlas-skills' release process: one plugin, one package, one bundle. Not for analysis work -- use atlas-skills.",
+    "version": "0.1.0"
+  },
+  "plugins": [
+    {
+      "name": "author-annotation-columns",
+      "source": "./plugins/author-annotation-columns",
+      "description": "Find which obs columns hold the authors' own cell-type, tissue, developmental-stage and disease annotations, as opposed to the portal's standardised fields, cluster indices and QC."
+    },
+    {
+      "name": "atlas-tools",
+      "source": "./plugins/atlas-tools",
+      "description": "Bundle: installs author-annotation-columns within a tested version range. Carries no skills of its own."
+    }
+  ]
+}

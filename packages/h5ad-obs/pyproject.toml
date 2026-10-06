@@ -1,0 +1,46 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "h5ad-obs"
+version = "0.3.0"
+description = "Read the obs table out of a remote .h5ad over HTTP range requests, without downloading the matrix."
+readme = "README.md"
+requires-python = ">=3.11"
+license = "MIT"
+authors = [{ name = "Cellular Semantics" }]
+keywords = ["anndata", "h5ad", "single-cell", "range-requests", "cell-atlas"]
+classifiers = [
+  "Intended Audience :: Science/Research",
+  "Topic :: Scientific/Engineering :: Bio-Informatics",
+]
+dependencies = [
+  "certifi",
+  "fsspec>=2024.2",
+  "aiohttp",
+  "h5py",
+  "numpy",
+  "pandas",
+]
+
+[project.optional-dependencies]
+# Parquet output only. CSV and TSV need nothing extra, and pyarrow is a large
+# wheel to pull on first run -- so it is opt-in rather than a hard dependency.
+parquet = ["pyarrow"]
+test = ["pytest>=8", "pyarrow"]
+
+[project.urls]
+Homepage = "https://github.com/Cellular-Semantics/atlas-skills-sandbox"
+Repository = "https://github.com/Cellular-Semantics/atlas-skills-sandbox"
+
+[project.scripts]
+h5ad-obs = "h5ad_obs.cli:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/h5ad_obs"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = ["live: reads a real remote h5ad over the network; excluded from CI"]
+addopts = "-m 'not live'"

@@ -1,0 +1,283 @@
+#!/usr/bin/env python3
+"""Plugin and package version bookkeeping, for CI and for people.
+
+    versions.py check-bumps --base origin/main   changed plugin/package => version bumped
+    versions.py untagged                         releases whose tag does not exist yet
+    versions.py pins [--tags N]                  every package pin users can be running
+    versions.py report [--check FILE]            the plugin -> package table (docs/pins.md)
+
+Standard library only, and it shells out to git rather than importing anything:
+CI runs it before any package is installed.
+
+Two tag families live in one repo, and both are cut from main by the release
+workflow, never by hand from a branch:
+
+    <plugin>--v<version>        what `claude plugin tag` writes, and what a
+                                bundle's version range and a ref-pinned
+                                marketplace resolve against
+    pkg-<dir>--v<version>       what a skill's `uvx --from ...@<tag>` pins
+
+A plugin tag freezes its SKILL.md, and the SKILL.md holds the package pin, so
+"which package does plugin version X run" is answered by reading the skill at
+the plugin's tag. Nothing else records the mapping, and nothing else needs to.
+"""
+
+from __future__ import annotations
+
+import argparse
+import json
+import re
+import subprocess
+import sys
+import tomllib
+from dataclasses import dataclass
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parent.parent
+
+# The same expression the CI pin check has always used: a git URL, a ref, and
+# the package subdirectory. The CLI is named after that directory.
+PIN = re.compile(r"git\+https://github\.com/[^\"'\s]+#subdirectory=packages/[a-z0-9-]+")
+PIN_PARTS = re.compile(r"@(?P<ref>[^#]+)#subdirectory=packages/(?P<pkg>[a-z0-9-]+)$")
+
+# Changes under these never alter what a user runs, so they need no bump.
+PACKAGE_EXEMPT = ("tests/", "README.md", "LICENSE")
+
+
+def git(*args: str, check: bool = True) -> str:
+    out = subprocess.run(["git", *args], cwd=ROOT, capture_output=True, text=True)
+    if check and out.returncode != 0:
+        sys.exit(f"git {' '.join(args)} failed:\n{out.stderr}")
+    return out.stdout
+
+
+def show(ref: str, path: str) -> str | None:
+    """A file's contents at a ref, or None when it does not exist there."""
+    out = subprocess.run(["git", "show", f"{ref}:{path}"], cwd=ROOT,
+                         capture_output=True, text=True)
+    return out.stdout if out.returncode == 0 else None
+
+
+def semver(v: str) -> tuple[int, ...]:
+    core = v.split("-", 1)[0].split("+", 1)[0]
+    try:
+        return tuple(int(p) for p in core.split("."))
+    except ValueError:
+        sys.exit(f"not a version: {v!r}")
+
+
+@dataclass(frozen=True)
+class Release:
+    kind: str       # "plugin" or "package"
+    name: str       # plugin name, or package directory
+    path: str       # repo-relative directory
+    version_file: str
+
+    @property
+    def tag_prefix(self) -> str:
+        return f"{self.name}--v" if self.kind == "plugin" else f"pkg-{self.name}--v"
+
+    def version_at(self, ref: str | None) -> str | None:
+        text = (ROOT / self.version_file).read_text() if ref is None else show(ref, self.version_file)
+        if text is None:
+            return None
+        if self.kind == "plugin":
+            return json.loads(text).get("version")
+        return tomllib.loads(text)["project"]["version"]
+
+    def tag(self, version: str) -> str:
+        return f"{self.tag_prefix}{version}"
+
+
+def releases() -> list[Release]:
+    found = []
+    for manifest in sorted(ROOT.glob("plugins/*/.claude-plugin/plugin.json")):
+        d = manifest.parent.parent
+        name = json.loads(manifest.read_text())["name"]
+        found.append(Release("plugin", name, d.relative_to(ROOT).as_posix(),
+                             manifest.relative_to(ROOT).as_posix()))
+    for pyproject in sorted(ROOT.glob("packages/*/pyproject.toml")):
+        d = pyproject.parent
+        found.append(Release("package", d.name, d.relative_to(ROOT).as_posix(),
+                             pyproject.relative_to(ROOT).as_posix()))
+    return found
+
+
+def tags_for(rel: Release) -> list[str]:
+    """This release line's tags, newest version first."""
+    tags = git("tag", "--list", f"{rel.tag_prefix}*").split()
+    return sorted(tags, key=lambda t: semver(t[len(rel.tag_prefix):]), reverse=True)
+
+
+# --- check-bumps -------------------------------------------------------------
+
+def check_bumps(base: str) -> int:
+    changed = git("diff", "--name-only", f"{base}...HEAD").split()
+    problems = []
+
+    marketplace = json.loads((ROOT / ".claude-plugin/marketplace.json").read_text())
+    listed = {p["name"]: p for p in marketplace["plugins"]}
+
+    for rel in releases():
+        touched = [f for f in changed if f.startswith(rel.path + "/")]
+        if rel.kind == "package":
+            touched = [f for f in touched
+                       if not f[len(rel.path) + 1:].startswith(PACKAGE_EXEMPT)]
+
+        if rel.kind == "plugin":
+            entry = listed.get(rel.name)
+            if entry is None:
+                problems.append(f"{rel.name}: not listed in .claude-plugin/marketplace.json")
+            elif "version" in entry and entry["version"] != rel.version_at(None):
+                # `claude plugin tag` refuses to tag when these disagree, and the
+                # release job would then fail after merge rather than here.
+                problems.append(f"{rel.name}: marketplace entry says {entry['version']}, "
+                                f"plugin.json says {rel.version_at(None)}")
+
+        if not touched:
+            continue
+        old, new = rel.version_at(base), rel.version_at(None)
+        if new is None:
+            problems.append(f"{rel.name}: {rel.version_file} has no version")
+        elif old is None:
+            print(f"ok    {rel.kind} {rel.name} {new} (new)")
+        elif semver(new) <= semver(old):
+            problems.append(
+                f"{rel.name}: {len(touched)} file(s) changed under {rel.path}/ but the "
+                f"version is still {old}" + (f" (now {new})" if new != old else "")
+                + f". Bump {rel.version_file}."
+                + (" Installed copies only refresh when this string changes, so without "
+                   "a bump nobody who already has the plugin receives this change."
+                   if rel.kind == "plugin" else ""))
+        else:
+            print(f"ok    {rel.kind} {rel.name} {old} -> {new}")
+
+        if new and rel.tag(new) in git("tag", "--list", rel.tag(new)).split():
+            problems.append(f"{rel.name}: tag {rel.tag(new)} already exists; "
+                            f"a released version cannot change")
+
+    for p in problems:
+        print(f"FAIL  {p}")
+    return 1 if problems else 0
+
+
+# --- untagged ----------------------------------------------------------------
+
+def untagged() -> int:
+    """`kind name version tag path`, one line per release still to be cut.
+
+    Packages print first: a plugin released in the same push may pin them.
+    """
+    rows = []
+    for rel in sorted(releases(), key=lambda r: r.kind != "package"):
+        v = rel.version_at(None)
+        if v and not git("tag", "--list", rel.tag(v)).strip():
+            rows.append(f"{rel.kind}\t{rel.name}\t{v}\t{rel.tag(v)}\t{rel.path}")
+    print("\n".join(rows))
+    return 0
+
+
+# --- pins --------------------------------------------------------------------
+
+def pins_at(ref: str | None, plugin: Release) -> set[str]:
+    if ref is None:
+        files = [p for p in (ROOT / plugin.path).rglob("*") if p.is_file()]
+        texts = [p.read_text(errors="replace") for p in files]
+    else:
+        names = git("ls-tree", "-r", "--name-only", ref, "--", plugin.path).split()
+        texts = [show(ref, n) or "" for n in names]
+    return {m for t in texts for m in PIN.findall(t)}
+
+
+def collect_pins(n_tags: int) -> dict[str, set[str]]:
+    """pin spec -> where it is referenced ("main", or plugin tags)."""
+    seen: dict[str, set[str]] = {}
+    for rel in releases():
+        if rel.kind != "plugin":
+            continue
+        for pin in pins_at(None, rel):
+            seen.setdefault(pin, set()).add(f"{rel.name}@HEAD")
+        for tag in tags_for(rel)[:n_tags]:
+            for pin in pins_at(tag, rel):
+                seen.setdefault(pin, set()).add(tag)
+    return seen
+
+
+def pins(n_tags: int) -> int:
+    for pin, where in sorted(collect_pins(n_tags).items()):
+        print(f"{pin}\t{' '.join(sorted(where))}")
+    return 0
+
+
+# --- report ------------------------------------------------------------------
+
+def report_text(n_tags: int) -> str:
+    lines = [
+        "# Plugin → package pins",
+        "",
+        "Generated by `scripts/versions.py report`; CI fails when it is stale.",
+        "This file shows main only: tags are cut after merge, so a checked-in",
+        "table that listed them would be stale the moment a release landed.",
+        "The nightly workflow's summary shows the same table with the supported",
+        "tags added (`report --tags 3`). A plugin tag freezes its skills, so each",
+        "of those rows is what a project pinned to that tag actually runs.",
+        "",
+        "| Plugin | Plugin version | Package | Package tag |",
+        "|---|---|---|---|",
+    ]
+    for rel in releases():
+        if rel.kind != "plugin":
+            continue
+        refs = [(None, f"{rel.version_at(None)} (main)")]
+        refs += [(t, t[len(rel.tag_prefix):]) for t in tags_for(rel)[:n_tags]]
+        for ref, label in refs:
+            found = sorted(pins_at(ref, rel))
+            if not found:
+                lines.append(f"| `{rel.name}` | {label} | — | — |")
+            for pin in found:
+                m = PIN_PARTS.search(pin)
+                lines.append(f"| `{rel.name}` | {label} | `{m['pkg']}` | `{m['ref']}` |")
+    return "\n".join(lines) + "\n"
+
+
+def report(n_tags: int, check: str | None) -> int:
+    text = report_text(n_tags)
+    if check is None:
+        print(text, end="")
+        return 0
+    current = (ROOT / check).read_text() if (ROOT / check).exists() else ""
+    if current != text:
+        print(f"{check} is stale. Regenerate it:\n"
+              f"  python scripts/versions.py report > {check}")
+        return 1
+    print(f"{check} is current")
+    return 0
+
+
+def main() -> int:
+    ap = argparse.ArgumentParser(description=__doc__,
+                                 formatter_class=argparse.RawDescriptionHelpFormatter)
+    sub = ap.add_subparsers(dest="cmd", required=True)
+    b = sub.add_parser("check-bumps")
+    b.add_argument("--base", required=True, help="ref to compare against, e.g. origin/main")
+    sub.add_parser("untagged")
+    p = sub.add_parser("pins")
+    # The supported window: the newest N releases of each plugin. Older tags
+    # still install, but nobody is told they work.
+    p.add_argument("--tags", type=int, default=3)
+    r = sub.add_parser("report")
+    r.add_argument("--tags", type=int, default=0, help="also show the newest N tags per plugin")
+    r.add_argument("--check", metavar="FILE")
+    a = ap.parse_args()
+
+    if a.cmd == "check-bumps":
+        return check_bumps(a.base)
+    if a.cmd == "untagged":
+        return untagged()
+    if a.cmd == "pins":
+        return pins(a.tags)
+    return report(a.tags, a.check)
+
+
+if __name__ == "__main__":
+    sys.exit(main())

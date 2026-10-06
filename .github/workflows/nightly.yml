@@ -1,0 +1,78 @@
+name: nightly
+
+# A tag never changes, but what installs from it does: h5ad-obs declares its
+# dependencies as ranges, and `uvx --from git+...` re-resolves them on a cold
+# cache (it does not read a uv.lock). So a release that passed when it was cut
+# can stop working months later with no commit to trigger a check. This job is
+# that check, for every release still in the supported window.
+
+on:
+  schedule:
+    - cron: "17 3 * * *"
+  workflow_dispatch:
+    inputs:
+      tags:
+        description: "Supported window: newest N tags per plugin"
+        default: "3"
+
+env:
+  WINDOW: ${{ inputs.tags || '3' }}
+
+jobs:
+  pins:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: false
+      - run: python3 scripts/versions.py report --tags "$WINDOW" >> "$GITHUB_STEP_SUMMARY"
+      - name: Every pin on main and at every supported plugin tag
+        run: |
+          set -uo pipefail
+          status=0
+          while IFS=$'\t' read -r pin where; do
+            cli=${pin##*subdirectory=packages/}
+            echo "::group::$cli  (used by $where)"
+            if uvx --from "$pin" "$cli" --version; then
+              echo "resolves"
+            else
+              echo "::error::$pin no longer installs. Used by: $where"
+              status=1
+            fi
+            echo "::endgroup::"
+          done < <(python3 scripts/versions.py pins --tags "$WINDOW")
+          exit $status
+
+  package-tests-at-tags:
+    # The package's own offline suite, run at each package tag a supported plugin
+    # release still pins -- not just at main. Catches an old release whose fresh
+    # dependency resolution has rotted, beyond what --version would show.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: false
+      - run: |
+          set -uo pipefail
+          status=0
+          refs=$(python3 scripts/versions.py pins --tags "$WINDOW" | cut -f1 \
+                 | sed -E 's/.*@([^#]+)#subdirectory=(packages\/[a-z0-9-]+)$/\1 \2/' | sort -u)
+          while read -r ref path; do
+            echo "::group::$ref"
+            wt="$RUNNER_TEMP/wt-$ref"
+            git worktree add -q "$wt" "$ref"
+            (
+              cd "$wt/$path" &&
+              uv venv -q &&
+              uv pip install -q -e ".[test]" &&
+              uv run pytest -q
+            ) || { echo "::error::$ref: package tests fail on a fresh install"; status=1; }
+            echo "::endgroup::"
+          done <<< "$refs"
+          exit $status
