@@ -152,7 +152,8 @@ def check_bumps(base: str) -> int:
         else:
             print(f"ok    {rel.kind} {rel.name} {old} -> {new}")
 
-        if new and rel.tag(new) in git("tag", "--list", rel.tag(new)).split():
+        # Only for an actual bump: an unchanged version is already reported above.
+        if new and new != old and rel.tag(new) in git("tag", "--list", rel.tag(new)).split():
             problems.append(f"{rel.name}: tag {rel.tag(new)} already exists; "
                             f"a released version cannot change")
 

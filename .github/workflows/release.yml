@@ -105,5 +105,8 @@ jobs:
               echo
               git log --format='- %s (%h)' ${prev:+"$prev.."}"$tag" -- "$path"
             } > notes.md
-            gh release create "$tag" --verify-tag --title "$name $version" --notes-file notes.md
+            # --latest=false: GitHub allows one "Latest" release per repo, which
+            # means nothing when every plugin and package has its own version line.
+            gh release create "$tag" --verify-tag --latest=false \
+              --title "$name $version" --notes-file notes.md
           done < untagged.tsv
