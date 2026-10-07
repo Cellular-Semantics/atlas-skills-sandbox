@@ -7,7 +7,7 @@ Works against any host honouring HTTP range requests — GCS, S3, Sanger COG,
 CELLxGENE's CDN, plain static hosts.
 
 ```sh
-uvx --from "git+https://github.com/Cellular-Semantics/atlas-skills-sandbox@pkg-h5ad-obs--v0.3.0#subdirectory=packages/h5ad-obs" \
+uvx --from "git+https://github.com/Cellular-Semantics/atlas-skills-sandbox@pkg-h5ad-obs--v0.3.1#subdirectory=packages/h5ad-obs" \
     h5ad-obs https://datasets.cellxgene.cziscience.com/<id>.h5ad --list-columns
 ```
 

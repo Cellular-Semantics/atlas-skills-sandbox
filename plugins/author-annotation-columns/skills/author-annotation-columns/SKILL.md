@@ -52,7 +52,7 @@ This is the whole shape of the skill, and the ordering matters.
 
 ```sh
 # 1. one remote read -- this is the expensive step, so do it once
-uvx --from "git+https://github.com/Cellular-Semantics/atlas-skills-sandbox@pkg-h5ad-obs--v0.3.0#subdirectory=packages/h5ad-obs" \
+uvx --from "git+https://github.com/Cellular-Semantics/atlas-skills-sandbox@pkg-h5ad-obs--v0.3.1#subdirectory=packages/h5ad-obs" \
     h5ad-obs <url> --out obs.parquet --block-size 0.25
 
 # 2. profile the file you just pulled -- free, no network
