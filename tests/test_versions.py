@@ -180,7 +180,8 @@ def test_untagged_lists_packages_before_plugins(repo: Path) -> None:
 def test_untagged_skips_released_versions(repo: Path) -> None:
     sh(repo, "git", "tag", "pkg-tool--v0.1.0")
     sh(repo, "git", "tag", "thing--v1.0.0")
-    assert run(repo, "untagged").stdout.strip() == ""
+    # Not even a newline: the release workflow reads each line as a release.
+    assert run(repo, "untagged").stdout == ""
 
 
 # --- pins and report ---------------------------------------------------------

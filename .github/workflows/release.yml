@@ -54,6 +54,7 @@ jobs:
         run: |
           set -euo pipefail
           while IFS=$'\t' read -r kind name version tag path; do
+            [ -n "$tag" ] || continue
             [ "$kind" = package ] || continue
             git tag -a "$tag" -m "$name $version" "$SHA"
             git push origin "$tag"
@@ -74,6 +75,7 @@ jobs:
         run: |
           set -euo pipefail
           while IFS=$'\t' read -r kind name version tag path; do
+            [ -n "$tag" ] || continue
             [ "$kind" = plugin ] || continue
             # The CLI's own tagger: it validates the plugin and refuses when
             # plugin.json and the marketplace entry disagree.
@@ -85,6 +87,7 @@ jobs:
         run: |
           set -euo pipefail
           while IFS=$'\t' read -r kind name version tag path; do
+            [ -n "$tag" ] || continue
             prefix=${tag%"$version"}
             prev=$(git tag --list "${prefix}*" --sort=-v:refname | grep -vx "$tag" | head -1 || true)
             {

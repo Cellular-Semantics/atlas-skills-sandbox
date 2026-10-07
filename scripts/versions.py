@@ -184,8 +184,10 @@ def untagged() -> int:
 
     Packages print first: a plugin released in the same push may pin them.
     """
-    print("\n".join(f"{rel.kind}\t{rel.name}\t{v}\t{rel.tag(v)}\t{rel.path}"
-                    for rel, v in pending()))
+    # Nothing at all when there is nothing to cut: an empty line would be read
+    # by the release loops as a release with no name.
+    for rel, v in pending():
+        print(f"{rel.kind}\t{rel.name}\t{v}\t{rel.tag(v)}\t{rel.path}")
     return 0
 
 
