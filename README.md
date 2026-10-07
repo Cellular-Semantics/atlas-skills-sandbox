@@ -1,17 +1,19 @@
 # atlas-skills-sandbox
 
 A cut-down copy of [atlas-skills](https://github.com/Cellular-Semantics/atlas-skills)
-for trying out its release process before adopting it there. It holds one
-plugin, the package that plugin runs, and a bundle — enough to exercise
-every versioning rule, and small enough that a mistake costs nothing.
+for trying out its release process before adopting it there. It holds two
+plugins that run the same package at **different versions**, that package, and
+a bundle — enough to exercise every versioning rule, and small enough that a
+mistake costs nothing.
 
 **Not for analysis work.** Use atlas-skills for that. The skill text is copied
-unchanged, so it still mentions `remote-h5ad-obs` and links to atlas-skills'
-benchmark; those refer to the parent repo.
+from the parent with only the pinned commands changed, so it still links to
+atlas-skills' benchmark and mentions `cap-tools`; those refer to the parent.
 
 ```
 .claude-plugin/marketplace.json    the marketplace (one file, in this repo)
-plugins/author-annotation-columns/ the skill + two picker sub-agents
+plugins/remote-h5ad-obs/           read obs from a remote h5ad   -> h5ad-obs 0.3.0
+plugins/author-annotation-columns/ the skill + two picker agents -> h5ad-obs 0.3.1
 plugins/atlas-tools/               bundle: author-annotation-columns ~0.4.0
 packages/h5ad-obs/                 the CLI the skill calls through uvx
 scripts/versions.py                bump check, release planning, pin report
@@ -37,9 +39,23 @@ plugin tag and you know exactly which package it runs. `docs/pins.md` shows
 the mapping for main; the nightly run's summary shows it for every supported
 tag.
 
-Two plugin releases that pin different package releases can run on one machine
-at once: `uvx` builds a separate cached environment per exact pin, so they never
-share an install.
+### Two plugins, two package versions, one session
+
+`remote-h5ad-obs` pins h5ad-obs 0.3.0 and `author-annotation-columns` pins
+0.3.1, and both can be enabled in one project and used in one session. Each
+skill's command names its exact package tag; `uvx` builds one cached
+environment per exact spec and runs the CLI from it, so the two versions never
+share an install and nothing lands on `PATH`. This holds as long as:
+
+- **every call in a skill is the full pinned command** — a bare `h5ad-obs …`
+  runs whatever is on `PATH`, or nothing;
+- **the pin names the extras the call needs** —
+  `"h5ad-obs[parquet] @ git+…@<tag>#subdirectory=…"`, since parquet output needs
+  pyarrow and the bare package does not bring it;
+- **files passed between skills keep their format** across the versions in use;
+  changing what the CLI writes is a contract change like any other;
+- **nobody `uv tool install`s these CLIs** — that puts a single version on `PATH`
+  for the whole machine.
 
 ## Installing
 
@@ -56,9 +72,16 @@ share an install.
 }
 ```
 
-Commit that as `.claude/settings.json` in a project, and every clone gets the
-plugin with no install step. It follows main, and an installed copy refreshes
-when the plugin's version string changes.
+Commit that as `.claude/settings.json` in a project. It enables the plugin but
+does not download it: each person runs, once per project,
+
+```sh
+claude plugin install author-annotation-columns@atlas-skills-sandbox --scope project
+```
+
+It follows main, and an installed copy refreshes when the plugin's version
+string changes and someone runs `claude plugin update` (auto-update is off by
+default for marketplaces outside Anthropic's own).
 
 ### Pin a release
 
@@ -81,8 +104,15 @@ Two things to know about pinning:
 
 - The tag snapshots the whole repo. A project pinned to a plugin tag gets every
   other plugin as it stood at that commit; enable only the one you pinned.
-- Whether two projects on one machine can pin the same marketplace name to
-  different tags is not yet tested — see `docs/test-plan.md`, step 5.
+- **One registration per marketplace name per machine.** Claude Code keeps a
+  single entry for `atlas-skills-sandbox` in `~/.claude/plugins/known_marketplaces.json`,
+  not one per project; a project's `ref` rewrites that shared entry. Tested
+  (test plan, step 6): a pinned project registered the tag, then an unpinned
+  project on the same machine installed the *pinned* version and overwrote the
+  registration. So a ref pin is reliable only where a machine needs one version
+  of the plugin. Two versions of the *same plugin* for one person needs a second
+  marketplace name (a "stable" channel). Two *different* plugins on different
+  package versions — the case above — needs nothing extra.
 
 ### Supported releases
 
@@ -133,7 +163,8 @@ A plugin-only change — skill wording, an agent prompt — is step 2 alone.
   already tagged.
 - Changing a CLI contract is a breaking change: bump the package's major
   version (minor while 0.x) and move each pinning skill deliberately.
-- Pin skills to package tags, never to a branch or commit.
+- Pin skills to package tags, never to a branch or commit. Every call in a
+  skill is the full pinned `uvx --from` command, with the extras it needs.
 - One skill per plugin, unless two genuinely cannot be used apart.
 
 ## CI

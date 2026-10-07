@@ -35,10 +35,14 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 
-# The same expression the CI pin check has always used: a git URL, a ref, and
-# the package subdirectory. The CLI is named after that directory.
-PIN = re.compile(r"git\+https://github\.com/[^\"'\s]+#subdirectory=packages/[a-z0-9-]+")
-PIN_PARTS = re.compile(r"@(?P<ref>[^#]+)#subdirectory=packages/(?P<pkg>[a-z0-9-]+)$")
+# A git URL, a ref, and the package subdirectory, plus an optional
+# `name[extras] @ ` in front so that CI installs exactly what the skill does --
+# a pin whose extra went missing would otherwise pass here and fail for users.
+# The CLI is named after the subdirectory.
+PIN = re.compile(r"(?:[a-z0-9-]+\[[a-z0-9,-]+\] @ )?"
+                 r"git\+https://github\.com/[^\"'\s]+#subdirectory=packages/[a-z0-9-]+")
+# The ref holds no "@" or space, so this skips the " @ " of a `name[extras] @` prefix.
+PIN_PARTS = re.compile(r"@(?P<ref>[^#@\s]+)#subdirectory=packages/(?P<pkg>[a-z0-9-]+)$")
 
 # Changes under these never alter what a user runs, so they need no bump.
 PACKAGE_EXEMPT = ("tests/", "README.md", "LICENSE")

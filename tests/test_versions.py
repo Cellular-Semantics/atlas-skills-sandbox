@@ -247,6 +247,23 @@ def test_pin_without_at_is_unchanged(repo: Path) -> None:
     assert spec_for(repo) == PIN.format(v="0.1.0")
 
 
+def test_pin_with_extras_keeps_them(repo: Path) -> None:
+    # CI must install `tool[fast] @ git+...`, not the bare URL, or a broken extra
+    # passes CI and fails for every user.
+    write(repo, "plugins/thing/skills/thing/SKILL.md",
+          f'uvx --from "tool[fast] @ {PIN.format(v="0.1.0")}" tool\n')
+    sh(repo, "git", "tag", "pkg-tool--v0.1.0")
+    assert spec_for(repo) == f"tool[fast] @ {PIN.format(v='0.1.0')}"
+    assert "| `tool` | `pkg-tool--v0.1.0` |" in run(repo, "report").stdout
+
+
+def test_extras_pin_to_tag_this_commit_will_cut(repo: Path) -> None:
+    write(repo, "plugins/thing/skills/thing/SKILL.md",
+          f'uvx --from "tool[fast] @ {PIN.format(v="0.1.0")}" tool\n')
+    assert spec_for(repo, "--at", "abc123") == f"tool[fast] @ {PIN.format(v='0.1.0')}".replace(
+        "@pkg-tool--v0.1.0#", "@abc123#")
+
+
 def test_report_check_detects_stale_file(repo: Path) -> None:
     write(repo, "docs/pins.md", run(repo, "report").stdout)
     assert run(repo, "report", "--check", "docs/pins.md").returncode == 0

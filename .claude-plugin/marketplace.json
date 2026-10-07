@@ -10,6 +10,11 @@
   },
   "plugins": [
     {
+      "name": "remote-h5ad-obs",
+      "source": "./plugins/remote-h5ad-obs",
+      "description": "Read the per-cell obs table out of a remote h5ad over HTTP range requests, without downloading the expression matrix."
+    },
+    {
       "name": "author-annotation-columns",
       "source": "./plugins/author-annotation-columns",
       "description": "Find which obs columns hold the authors' own cell-type, tissue, developmental-stage and disease annotations, as opposed to the portal's standardised fields, cluster indices and QC."
