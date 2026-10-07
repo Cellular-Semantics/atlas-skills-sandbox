@@ -10,4 +10,4 @@ of those rows is what a project pinned to that tag actually runs.
 | Plugin | Plugin version | Package | Package tag |
 |---|---|---|---|
 | `atlas-tools` | 0.1.0 (main) | — | — |
-| `author-annotation-columns` | 0.4.0 (main) | `h5ad-obs` | `pkg-h5ad-obs--v0.3.0` |
+| `author-annotation-columns` | 0.4.1 (main) | `h5ad-obs` | `pkg-h5ad-obs--v0.3.1` |
