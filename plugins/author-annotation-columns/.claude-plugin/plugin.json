@@ -1,6 +1,6 @@
 {
   "name": "author-annotation-columns",
-  "version": "0.4.1",
+  "version": "0.4.2",
   "description": "Work out which obs columns in a single-cell dataset hold the authors' own annotations — cell type, tissue, developmental stage, disease — as opposed to the portal's standardised fields, cluster indices, donor ids and QC. Profiles the columns, has a picker sub-agent judge them, and pulls the ones it picks.",
   "author": {
     "name": "Cellular Semantics",

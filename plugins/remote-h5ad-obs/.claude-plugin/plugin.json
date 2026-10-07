@@ -1,0 +1,19 @@
+{
+  "name": "remote-h5ad-obs",
+  "version": "0.3.1",
+  "description": "Read the per-cell `obs` table out of a remote .h5ad over HTTP range requests, without downloading the expression matrix. Works against any host that honours range requests — GCS, S3, Sanger COG, the CELLxGENE CDN, a plain static host.",
+  "author": {
+    "name": "Cellular Semantics",
+    "url": "https://github.com/Cellular-Semantics"
+  },
+  "homepage": "https://github.com/Cellular-Semantics/atlas-skills-sandbox",
+  "repository": "https://github.com/Cellular-Semantics/atlas-skills-sandbox",
+  "license": "MIT",
+  "keywords": [
+    "single-cell",
+    "cell-atlas",
+    "anndata",
+    "h5ad",
+    "range-requests"
+  ]
+}
