@@ -10,5 +10,5 @@ of those rows is what a project pinned to that tag actually runs.
 | Plugin | Plugin version | Package | Package tag |
 |---|---|---|---|
 | `atlas-tools` | 0.1.0 (main) | — | — |
-| `author-annotation-columns` | 0.4.2 (main) | `h5ad-obs` | `pkg-h5ad-obs--v0.3.1` |
+| `author-annotation-columns` | 0.5.0 (main) | `h5ad-obs` | `pkg-h5ad-obs--v0.3.1` |
 | `remote-h5ad-obs` | 0.3.1 (main) | `h5ad-obs` | `pkg-h5ad-obs--v0.3.0` |
