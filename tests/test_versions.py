@@ -84,6 +84,16 @@ def test_skill_edit_without_bump_fails(repo: Path) -> None:
     assert "thing" in out.stdout and "still 1.0.0" in out.stdout
 
 
+def test_unbumped_released_version_reports_once(repo: Path) -> None:
+    # Forgetting to bump is one fault, not also "re-releasing" 1.0.0.
+    sh(repo, "git", "tag", "thing--v1.0.0", "main")
+    write(repo, "plugins/thing/skills/thing/SKILL.md", "changed\n")
+    commit(repo, "edit skill")
+    out = run(repo, "check-bumps", "--base", "main")
+    assert out.returncode == 1
+    assert out.stdout.count("FAIL") == 1 and "already exists" not in out.stdout
+
+
 def test_skill_edit_with_bump_passes(repo: Path) -> None:
     write(repo, "plugins/thing/skills/thing/SKILL.md", "changed\n")
     set_plugin_version(repo, "1.0.1")

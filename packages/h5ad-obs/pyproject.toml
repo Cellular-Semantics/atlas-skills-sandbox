@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "h5ad-obs"
-version = "0.3.0"
+version = "0.3.1"
 description = "Read the obs table out of a remote .h5ad over HTTP range requests, without downloading the matrix."
 readme = "README.md"
 requires-python = ">=3.11"
@@ -15,13 +15,20 @@ classifiers = [
   "Intended Audience :: Science/Research",
   "Topic :: Scientific/Engineering :: Bio-Informatics",
 ]
+# `uvx --from git+...@<tag>` resolves these fresh on every cold cache and ignores
+# uv.lock, so these ranges are what a release tag actually freezes. `~=X.Y.Z`
+# accepts patch releases -- where security fixes land -- and nothing newer.
+# certifi is unbounded on purpose: it is the trust store reader.py builds its TLS
+# context from, and a frozen CA bundle goes stale. numpy 2.4 is the newest line
+# with wheels for Python 3.11. Transitive dependencies still float; the nightly
+# workflow is what notices if one breaks an old tag.
 dependencies = [
   "certifi",
-  "fsspec>=2024.2",
-  "aiohttp",
-  "h5py",
-  "numpy",
-  "pandas",
+  "fsspec~=2026.9.0",
+  "aiohttp~=3.14.4",
+  "h5py~=3.16.0",
+  "numpy~=2.4.6",
+  "pandas~=3.0.6",
 ]
 
 [project.optional-dependencies]
