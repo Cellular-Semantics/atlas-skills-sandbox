@@ -33,6 +33,8 @@ jobs:
   test:
     runs-on: ubuntu-latest
     strategy:
+      # One Python version failing says nothing about the others; see them all.
+      fail-fast: false
       matrix:
         python: ["3.11", "3.12", "3.13"]
     steps:
@@ -48,6 +50,13 @@ jobs:
       - run: uv run pytest packages/h5ad-obs -q
       # The release tooling, against throwaway git repos.
       - run: uv run pytest tests -q
+
+  pins-report:
+    # Python-independent, so not in the matrix above -- where it ran three times,
+    # and a stale report cancelled the other Python versions' test runs.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
       - run: python3 scripts/versions.py report --check docs/pins.md
 
   version-bumps:
