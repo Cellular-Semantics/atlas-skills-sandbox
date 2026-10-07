@@ -107,7 +107,9 @@ def test_version_going_backwards_fails(repo: Path) -> None:
     write(repo, "plugins/thing/skills/thing/SKILL.md", "changed\n")
     set_plugin_version(repo, "0.9.0")
     commit(repo, "downgrade")
-    assert run(repo, "check-bumps", "--base", "main").returncode == 1
+    out = run(repo, "check-bumps", "--base", "main")
+    assert out.returncode == 1
+    assert "went backwards, 1.0.0 -> 0.9.0" in out.stdout and "still" not in out.stdout
 
 
 def test_package_code_without_bump_fails(repo: Path) -> None:

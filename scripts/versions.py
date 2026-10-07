@@ -146,10 +146,11 @@ def check_bumps(base: str) -> int:
         elif old is None:
             print(f"ok    {rel.kind} {rel.name} {new} (new)")
         elif semver(new) <= semver(old):
+            what = (f"the version is still {old}" if new == old
+                    else f"the version went backwards, {old} -> {new}")
             problems.append(
-                f"{rel.name}: {len(touched)} file(s) changed under {rel.path}/ but the "
-                f"version is still {old}" + (f" (now {new})" if new != old else "")
-                + f". Bump {rel.version_file}."
+                f"{rel.name}: {len(touched)} file(s) changed under {rel.path}/ but "
+                f"{what}. Bump {rel.version_file} above {old}."
                 + (" Installed copies only refresh when this string changes, so without "
                    "a bump nobody who already has the plugin receives this change."
                    if rel.kind == "plugin" else ""))
