@@ -92,22 +92,30 @@ Older tags still install, but nothing checks that they still work.
 
 ## Releasing
 
-Releases are cut by CI from main, never by hand. In order:
+Releases are cut by CI from main, never by hand.
 
-1. **Change a package**: edit, bump `pyproject.toml`'s version, open a PR.
+1. **Change a package**: edit, bump `pyproject.toml`'s version.
    `version-bumps` fails if the code changed and the version did not.
-   Merge. The `release` workflow tags `pkg-<dir>--v<new>` and checks it
-   installs from a cold cache.
-2. **Adopt it in a plugin**: second PR — move the skill's pin to the new tag,
-   bump `plugin.json`. `skill-pins-resolve` proves the pin installs. Merge.
-   `release` runs `claude plugin tag`, which validates the plugin and checks
-   it against the marketplace entry, then pushes `<plugin>--v<new>` and writes a
-   GitHub Release listing the package pins.
+2. **Adopt it in a plugin** — same PR or a later one: move the skill's pin to
+   the new package tag, bump `plugin.json`, regenerate `docs/pins.md`.
+3. Merge. Once `test` is green on main, `release` tags `pkg-<dir>--v<new>`,
+   checks it installs from a cold cache, then runs `claude plugin tag` —
+   which validates the plugin and checks it against the marketplace entry —
+   and writes a GitHub Release listing the plugin's package pins.
 
-The two steps cannot share a PR: the package tag does not exist until the first
-merge, so the pin has nothing to resolve to. (The parent repo pushes the package
-tag from a branch and does both in one PR; that puts an unreviewed commit
-behind a tag users install.)
+A pin to a package tag that does not exist yet would normally fail
+`skill-pins-resolve`. The exception is the tag this very commit's release will
+cut (the package's current version, untagged): that is checked at the commit
+instead, since the tag can only appear after merge. Without the exception, the
+first release of any package deadlocks — `test` waits for a tag that only
+`release` makes, and `release` waits for `test`. Any other missing tag still
+fails.
+
+For the few minutes between merge and `release` finishing, main pins a tag that
+does not exist yet. A project tracking main that installs in that window gets
+a failed `uvx` call until the tag lands. (The parent repo avoids the window by
+pushing the package tag from a branch before merging; that puts an unreviewed
+commit behind a tag users install.)
 
 A plugin-only change — skill wording, an agent prompt — is step 2 alone.
 

@@ -187,7 +187,7 @@ def release_history(repo: Path) -> None:
 
 def test_pins_include_supported_tags(repo: Path) -> None:
     release_history(repo)
-    rows = dict(line.split("\t") for line in run(repo, "pins", "--tags", "2").stdout.splitlines())
+    rows = dict(line.split("\t")[:2] for line in run(repo, "pins", "--tags", "2").stdout.splitlines())
     assert rows[PIN.format(v="0.1.0")] == "thing--v1.0.0"
     assert rows[PIN.format(v="0.2.0")] == "thing--v1.1.0 thing@HEAD"
 
@@ -207,6 +207,34 @@ def test_tags_sort_by_version_not_text(repo: Path) -> None:
         sh(repo, "git", "tag", f"thing--v{v}")
     out = run(repo, "pins", "--tags", "1").stdout
     assert "pkg-tool--v1.10.0" in out and "pkg-tool--v1.9.0" not in out
+
+
+def spec_for(repo: Path, *args: str) -> str:
+    [line] = run(repo, "pins", "--tags", "0", *args).stdout.splitlines()
+    return line.split("\t")[2]
+
+
+def test_pin_to_tag_this_commit_will_cut_installs_from_commit(repo: Path) -> None:
+    # The first release of a package: the skill pins pkg-tool--v0.1.0, which the
+    # release workflow cuts only after this check passes. Insisting on the tag
+    # would deadlock; the commit holds the same files.
+    assert spec_for(repo, "--at", "abc123") == PIN.format(v="0.1.0").replace(
+        "@pkg-tool--v0.1.0#", "@abc123#")
+
+
+def test_pin_to_existing_tag_installs_from_tag(repo: Path) -> None:
+    sh(repo, "git", "tag", "pkg-tool--v0.1.0")
+    assert spec_for(repo, "--at", "abc123") == PIN.format(v="0.1.0")
+
+
+def test_pin_to_a_tag_no_release_will_cut_is_left_to_fail(repo: Path) -> None:
+    # A typo, or a version nobody bumped the package to: not this commit's release.
+    set_pin(repo, "0.9.9")
+    assert spec_for(repo, "--at", "abc123") == PIN.format(v="0.9.9")
+
+
+def test_pin_without_at_is_unchanged(repo: Path) -> None:
+    assert spec_for(repo) == PIN.format(v="0.1.0")
 
 
 def test_report_check_detects_stale_file(repo: Path) -> None:

@@ -33,7 +33,7 @@ jobs:
         run: |
           set -uo pipefail
           status=0
-          while IFS=$'\t' read -r pin where; do
+          while IFS=$'\t' read -r pin where _; do
             cli=${pin##*subdirectory=packages/}
             echo "::group::$cli  (used by $where)"
             if uvx --from "$pin" "$cli" --version; then

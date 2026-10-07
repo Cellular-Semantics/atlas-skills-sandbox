@@ -3,7 +3,7 @@
 
     versions.py check-bumps --base origin/main   changed plugin/package => version bumped
     versions.py untagged                         releases whose tag does not exist yet
-    versions.py pins [--tags N]                  every package pin users can be running
+    versions.py pins [--tags N] [--at SHA]       every package pin users can be running
     versions.py report [--check FILE]            the plugin -> package table (docs/pins.md)
 
 Standard library only, and it shells out to git rather than importing anything:
@@ -163,17 +163,23 @@ def check_bumps(base: str) -> int:
 
 # --- untagged ----------------------------------------------------------------
 
+def pending() -> list[tuple[Release, str]]:
+    """Releases whose current version has no tag yet, packages first."""
+    out = []
+    for rel in sorted(releases(), key=lambda r: r.kind != "package"):
+        v = rel.version_at(None)
+        if v and not git("tag", "--list", rel.tag(v)).strip():
+            out.append((rel, v))
+    return out
+
+
 def untagged() -> int:
     """`kind name version tag path`, one line per release still to be cut.
 
     Packages print first: a plugin released in the same push may pin them.
     """
-    rows = []
-    for rel in sorted(releases(), key=lambda r: r.kind != "package"):
-        v = rel.version_at(None)
-        if v and not git("tag", "--list", rel.tag(v)).strip():
-            rows.append(f"{rel.kind}\t{rel.name}\t{v}\t{rel.tag(v)}\t{rel.path}")
-    print("\n".join(rows))
+    print("\n".join(f"{rel.kind}\t{rel.name}\t{v}\t{rel.tag(v)}\t{rel.path}"
+                    for rel, v in pending()))
     return 0
 
 
@@ -203,9 +209,30 @@ def collect_pins(n_tags: int) -> dict[str, set[str]]:
     return seen
 
 
-def pins(n_tags: int) -> int:
+def install_spec(pin: str, at: str | None, to_cut: set[str]) -> str:
+    """What to hand `uvx --from` to check that `pin` will work for a user.
+
+    Normally the pin itself. The exception is a pin to a package tag that does
+    not exist yet but that the release workflow will cut from this very commit
+    -- the package's version here has no tag. That tag cannot be fetched until
+    after merge, and the release workflow only runs once this check has passed,
+    so insisting on the tag would deadlock the first release of every package.
+    The commit holds the same files the tag will, so it is checked instead.
+
+    A pin to any other missing tag -- a typo, a version nobody bumped to --
+    is left alone, and fails as it should.
+    """
+    m = PIN_PARTS.search(pin)
+    if at and m and m["ref"] in to_cut:
+        return pin.replace(f"@{m['ref']}#", f"@{at}#")
+    return pin
+
+
+def pins(n_tags: int, at: str | None) -> int:
+    """`pin  where  spec-to-install`, one line per distinct pin."""
+    to_cut = {rel.tag(v) for rel, v in pending() if rel.kind == "package"}
     for pin, where in sorted(collect_pins(n_tags).items()):
-        print(f"{pin}\t{' '.join(sorted(where))}")
+        print(f"{pin}\t{' '.join(sorted(where))}\t{install_spec(pin, at, to_cut)}")
     return 0
 
 
@@ -265,6 +292,8 @@ def main() -> int:
     # The supported window: the newest N releases of each plugin. Older tags
     # still install, but nobody is told they work.
     p.add_argument("--tags", type=int, default=3)
+    p.add_argument("--at", metavar="SHA",
+                   help="commit to install from for a package tag this commit's release will cut")
     r = sub.add_parser("report")
     r.add_argument("--tags", type=int, default=0, help="also show the newest N tags per plugin")
     r.add_argument("--check", metavar="FILE")
@@ -275,7 +304,7 @@ def main() -> int:
     if a.cmd == "untagged":
         return untagged()
     if a.cmd == "pins":
-        return pins(a.tags)
+        return pins(a.tags, a.at)
     return report(a.tags, a.check)
 
 
