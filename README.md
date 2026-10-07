@@ -14,7 +14,7 @@ atlas-skills' benchmark and mentions `cap-tools`; those refer to the parent.
 .claude-plugin/marketplace.json    the marketplace (one file, in this repo)
 plugins/remote-h5ad-obs/           read obs from a remote h5ad   -> h5ad-obs 0.3.0
 plugins/author-annotation-columns/ the skill + two picker agents -> h5ad-obs 0.3.1
-plugins/atlas-tools/               bundle: author-annotation-columns ~0.4.0
+plugins/atlas-tools/               bundle: installs author-annotation-columns
 packages/h5ad-obs/                 the CLI the skill calls through uvx
 scripts/versions.py                bump check, release planning, pin report
 docs/pins.md                       plugin -> package pins on main (generated)
@@ -31,7 +31,7 @@ package with tests.
 |---|---|---|
 | Version lives in | `plugins/<p>/.claude-plugin/plugin.json` | `packages/<d>/pyproject.toml` |
 | Tag | `<plugin>--v<version>` | `pkg-<dir>--v<version>` |
-| Who reads the tag | a ref-pinned marketplace; a bundle's version range | the `uvx --from …@<tag>` line in a skill |
+| Who reads the tag | a ref-pinned marketplace | the `uvx --from …@<tag>` line in a skill |
 
 A plugin tag freezes its SKILL.md, and the SKILL.md holds the package pin. So
 **a plugin release determines its package release** — read the skill at the
@@ -113,6 +113,18 @@ Two things to know about pinning:
   of the plugin. Two versions of the *same plugin* for one person needs a second
   marketplace name (a "stable" channel). Two *different* plugins on different
   package versions — the case above — needs nothing extra.
+
+### Bundles take no version range
+
+A bundle's dependency can carry a range (`{"name": …, "version": "~0.4.0"}`),
+and the Claude Code docs say it installs the highest tag in that range. Tested
+on Claude Code 2.1.291 (test plan, step 8), it did not: with
+`author-annotation-columns` at 0.5.0 on main and `--v0.4.2` tagged, a fresh
+install of the bundle took main's 0.5.0, then refused to load the bundle —
+`Requires … ~0.4.0, installed 0.5.0`. The range only checks; it never holds a
+plugin back. So `atlas-tools` lists its plugin unversioned, and a range would
+break it at every minor release. Holding a plugin at a tested version needs a
+separate marketplace name, not a range.
 
 ### Supported releases
 

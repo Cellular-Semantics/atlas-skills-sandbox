@@ -1,7 +1,7 @@
 {
   "name": "atlas-tools",
-  "version": "0.1.0",
-  "description": "Bundle: installs author-annotation-columns at a version range it was tested against. Carries no skills of its own; install the plugin directly if you want it to track the marketplace.",
+  "version": "0.2.0",
+  "description": "Bundle: installs author-annotation-columns, at whatever version the marketplace publishes. Carries no skills of its own.",
   "author": {
     "name": "Cellular Semantics",
     "url": "https://github.com/Cellular-Semantics"
@@ -10,6 +10,6 @@
   "repository": "https://github.com/Cellular-Semantics/atlas-skills-sandbox",
   "license": "MIT",
   "dependencies": [
-    { "name": "author-annotation-columns", "version": "~0.4.0" }
+    "author-annotation-columns"
   ]
 }
