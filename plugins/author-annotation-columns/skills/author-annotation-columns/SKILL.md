@@ -48,7 +48,7 @@ with `remote-h5ad-obs`.
 
 ## Read obs once, then profile it locally
 
-This is the whole shape of the skill, and the ordering matters.
+This is the whole shape of the skill, and the order matters.
 
 ```sh
 # 1. one remote read -- this is the expensive step, so do it once
