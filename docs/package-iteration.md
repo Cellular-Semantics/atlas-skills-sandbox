@@ -32,13 +32,12 @@ uv venv && uv pip install -e "packages/h5ad-obs[test]"
 Do **not** point the `--from` pin at a local directory instead. `uvx` caches the
 build: editing the source and re-running gives the stale version back, silently.
 
-**Releasing.** Two PRs, because the package tag is cut on merge:
+**Releasing.** Bump `packages/<x>/pyproject.toml`; move the pin in every
+skill that should adopt it; bump those plugins' versions; regenerate
+`docs/pins.md`. One PR or two, as suits. On merge `release` tags the package,
+then the plugins.
 
-1. Bump `packages/<x>/pyproject.toml`. Merge. `release` tags `pkg-<x>--vX.Y.Z`.
-2. Move the pin in every skill that should adopt it, bump those plugins'
-   versions, regenerate `docs/pins.md`. Merge. `release` tags the plugins.
-
-A plugin that should stay on the old package simply is not part of step 2.
+A plugin that should stay on the old package simply keeps its old pin.
 
 A pin must resolve for someone with a cold cache. Check it the way CI does:
 

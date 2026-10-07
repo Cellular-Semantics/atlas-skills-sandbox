@@ -93,39 +93,47 @@ jobs:
     # run, run as written. A pin to a tag that does not exist yet fails for
     # everyone except the author, whose uv cache already holds the package.
     #
-    # Which is also why a package change and the pin that adopts it cannot share
-    # a pull request: the package tag is cut on merge, so the pin has nothing to
-    # resolve to until then. Release the package first, then move the pin.
+    # One exception: a pin to the package tag that the release workflow will cut
+    # from this commit -- the package's version here, not yet tagged. That tag
+    # cannot exist before merge, and release only runs after this job passes, so
+    # it is checked at this commit instead (see install_spec in versions.py).
     #
     # Pins at older plugin tags are the nightly workflow's job.
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
+        with:
+          # Tags, so versions.py can tell a tag still to be cut from a typo.
+          fetch-depth: 0
       - uses: astral-sh/setup-uv@v6
         with:
           enable-cache: false
       - name: Resolve every pin on this branch
+        env:
+          SHA: ${{ github.event.pull_request.head.sha || github.sha }}
         run: |
           set -uo pipefail
-          pins=$(python3 scripts/versions.py pins --tags 0 | cut -f1)
-          if [ -z "$pins" ]; then
+          rows=$(python3 scripts/versions.py pins --tags 0 --at "$SHA")
+          if [ -z "$rows" ]; then
             echo "no pins found, which means the pattern is wrong rather than the repo"
             exit 1
           fi
           status=0
-          while read -r pin; do
+          while IFS=$'\t' read -r pin where spec; do
             # Every package's console script is named after its directory, and
             # every CLI here supports --version.
             cli=${pin##*subdirectory=packages/}
             echo "::group::$cli  $pin"
-            if uvx --from "$pin" "$cli" --version; then
+            if [ "$spec" != "$pin" ]; then
+              echo "::notice::${pin%%#*} is cut on merge; checking this commit ($SHA) instead"
+            fi
+            if uvx --from "$spec" "$cli" --version; then
               echo "resolves"
             else
-              echo "DOES NOT RESOLVE. Either the tag was never pushed, or the"
-              echo "subdirectory is wrong. A package tag only exists once the"
-              echo "release workflow has cut it from main."
+              echo "DOES NOT RESOLVE. Either the tag was never pushed and is not"
+              echo "this commit's release, or the subdirectory is wrong."
               status=1
             fi
             echo "::endgroup::"
-          done <<< "$pins"
+          done <<< "$rows"
           exit $status
