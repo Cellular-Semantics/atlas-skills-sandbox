@@ -27,6 +27,7 @@ jobs:
           fetch-depth: 0
       - uses: astral-sh/setup-uv@v6
         with:
+          version: "0.13.7"
           enable-cache: false
       - run: python3 scripts/versions.py report --tags "$WINDOW" >> "$GITHUB_STEP_SUMMARY"
       - name: Every pin on main and at every supported plugin tag
@@ -57,6 +58,7 @@ jobs:
           fetch-depth: 0
       - uses: astral-sh/setup-uv@v6
         with:
+          version: "0.13.7"
           enable-cache: false
       - run: |
           set -uo pipefail

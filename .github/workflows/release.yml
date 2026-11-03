@@ -36,6 +36,7 @@ jobs:
           fetch-depth: 0
       - uses: astral-sh/setup-uv@v6
         with:
+          version: "0.13.7"
           enable-cache: false
       - uses: actions/setup-node@v4
         with:
